@@ -1,0 +1,5 @@
+/*
+All material copyright ESRI, All Rights Reserved, unless otherwise specified.
+See https://js.arcgis.com/4.33/esri/copyright.txt for details.
+*/
+import{numericHash as e}from"../../../../../../core/string.js";import{validateLabelingInfo as s}from"../../../../../../layers/support/labelingInfo.js";import{getServiceGeometryType as l}from"../../layerAdapters/geometryUtils.js";import{createSymbolMeshSchemas as a}from"./symbols/SymbolSchema.js";async function o(e,a,o){const r=a.labelsVisible&&a.labelingInfo||[],i=l(a),t=s(r,i);return{type:"label",classes:await Promise.all(t.map(((s,l)=>n(e,s,a.labelsVisible,a.layerId,l,i,o))))}}async function n(s,l,o,n,r,i,t){const m=e(`${n} ${r}`),c=await a(l,{schemaOptions:s,uniforms:t,labelClassId:m});return{maxScale:l.maxScale,minScale:l.minScale,deconflictionEnabled:"none"!==l.deconflictionStrategy&&o,expression:l.labelExpressionInfo?.expression??l.labelExpression,where:l.where,meshes:c,labelClassId:m,geometryType:i}}export{o as createLabelMatcherSchema};
