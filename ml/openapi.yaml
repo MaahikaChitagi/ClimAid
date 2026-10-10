@@ -1,0 +1,91 @@
+openapi: 3.0.3
+info:
+  title: ClimAid Disaster CNN
+  version: 1.0.0
+  description: >
+    Classifies a disaster photo into flood, wildfire, or storm, and rates
+    visible damage as low, moderate, or severe.
+paths:
+  /api/health:
+    get:
+      summary: Model status
+      responses:
+        "200":
+          description: Checkpoint is loaded
+  /api/classify:
+    post:
+      summary: Classify an uploaded image
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Predicted disaster type and damage severity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Classification"
+  /api/classify-url:
+    post:
+      summary: Classify an image by URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [imageUrl]
+              properties:
+                imageUrl:
+                  type: string
+                  format: uri
+      responses:
+        "200":
+          description: Predicted disaster type and damage severity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Classification"
+components:
+  schemas:
+    Classification:
+      type: object
+      required:
+        - disasterType
+        - disasterConfidence
+        - severity
+        - severityConfidence
+        - probabilities
+        - model
+      properties:
+        disasterType:
+          type: string
+          enum: [flood, wildfire, storm]
+        disasterConfidence:
+          type: number
+        severity:
+          type: string
+          enum: [low, moderate, severe]
+        severityConfidence:
+          type: number
+        probabilities:
+          type: object
+          properties:
+            disaster:
+              type: object
+              additionalProperties:
+                type: number
+            severity:
+              type: object
+              additionalProperties:
+                type: number
+        model:
+          type: string

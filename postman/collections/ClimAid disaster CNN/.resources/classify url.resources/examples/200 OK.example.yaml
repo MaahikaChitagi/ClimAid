@@ -1,0 +1,26 @@
+$kind: http-example
+name: 200 OK
+order: 1000
+request:
+  method: POST
+  url: '{{base_url}}/api/classify-url'
+response:
+  statusCode: 200
+  statusText: OK
+  headers:
+    - key: Content-Type
+      value: application/json
+  body:
+    type: json
+    content: |-
+      {
+        "disasterType": "flood",
+        "disasterConfidence": 0.91,
+        "severity": "severe",
+        "severityConfidence": 0.8,
+        "probabilities": {
+          "disaster": { "flood": 0.91, "wildfire": 0.04, "storm": 0.05 },
+          "severity": { "low": 0.05, "moderate": 0.15, "severe": 0.8 }
+        },
+        "model": "disaster-cnn-v1"
+      }

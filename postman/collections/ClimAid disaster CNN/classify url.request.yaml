@@ -1,0 +1,14 @@
+$kind: http-request
+method: POST
+url: '{{base_url}}/api/classify-url'
+order: 2000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "imageUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6e/Flooding_in_Nashville%2C_Tennessee%2C_May_2010.jpg/320px-Flooding_in_Nashville%2C_Tennessee%2C_May_2010.jpg"
+    }
+examples: './.resources/classify url.resources/examples'

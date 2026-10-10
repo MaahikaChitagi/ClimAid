@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from './Sidebar.jsx';
 import { db } from './Config.js';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -6,6 +6,8 @@ import { FiChevronDown, FiChevronUp } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 import { auth } from './Config.js';
 import { onAuthStateChanged } from './Config.js';
+import AiClassificationBadge from './AiClassificationBadge.jsx';
+import { CATEGORY_FROM_DISASTER, classifyImageFile, classifyImageUrl, compressImageFile } from './classifyImage.js';
 
 
 
@@ -20,10 +22,16 @@ const ReportIssue = () => {
   const [urgency, setUrgency] = useState('Medium');
   const [category, setCategory] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [imageFile, setImageFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [classification, setClassification] = useState(null);
+  const [classifying, setClassifying] = useState(false);
+  const [classifyError, setClassifyError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [previewCollapsed, setPreviewCollapsed] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const navigate = useNavigate();
+  const imageInputRef = useRef(null);
 
 useEffect(() => {
   const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -56,6 +64,43 @@ useEffect(() => {
     }
   };
 
+  const applyClassification = (result) => {
+    setClassification(result);
+    setClassifyError('');
+    const suggested = CATEGORY_FROM_DISASTER[result.disasterType];
+    if (suggested && !category) setCategory(suggested);
+  };
+
+  const handleImageFile = async (file) => {
+    if (!file) return;
+    setImageFile(file);
+    setPreviewUrl(URL.createObjectURL(file));
+    setClassifying(true);
+    setClassifyError('');
+    try {
+      applyClassification(await classifyImageFile(file));
+    } catch (err) {
+      setClassification(null);
+      setClassifyError(err.message);
+    }
+    setClassifying(false);
+  };
+
+  const classifyPastedUrl = async (raw) => {
+    const url = (raw ?? '').trim();
+    if (!url.startsWith('http') || imageFile) return;
+    setImageUrl(url);
+    setClassifying(true);
+    setClassifyError('');
+    try {
+      applyClassification(await classifyImageUrl(url));
+    } catch (err) {
+      setClassification(null);
+      setClassifyError(err.message);
+    }
+    setClassifying(false);
+  };
+
   const handleSubmit = async () => {
     if (!description || !category || !title || !address) {
       alert('Please fill in all required fields.');
@@ -71,6 +116,26 @@ useEffect(() => {
         return;
       }
 
+      let storedImageUrl = imageUrl.trim();
+      if (imageFile) {
+        storedImageUrl = await compressImageFile(imageFile);
+      }
+
+      let aiClassification = classification;
+      if (!aiClassification && imageFile) {
+        try {
+          aiClassification = await classifyImageFile(imageFile);
+        } catch (err) {
+          console.warn('Classification skipped:', err);
+        }
+      } else if (!aiClassification && storedImageUrl.startsWith('http')) {
+        try {
+          aiClassification = await classifyImageUrl(storedImageUrl);
+        } catch (err) {
+          console.warn('Classification skipped:', err);
+        }
+      }
+
       await addDoc(collection(db, 'reports'), {
         title,
         description,
@@ -82,8 +147,9 @@ useEffect(() => {
         lat: coords.lat,
         lng: coords.lng,
         createdAt: serverTimestamp(),
-        imageUrl,
+        imageUrl: storedImageUrl,
         userId: user?.uid,
+        ...(aiClassification ? { aiClassification } : {}),
       });
 
       alert('Issue reported successfully!');
@@ -95,6 +161,10 @@ useEffect(() => {
       setUrgency('Medium');
       setCategory('');
       setImageUrl('');
+      setImageFile(null);
+      setPreviewUrl('');
+      setClassification(null);
+      setClassifyError('');
     } catch (err) {
       console.error('Error reporting issue:', err);
       alert('Something went wrong.');
@@ -159,10 +229,15 @@ useEffect(() => {
           >
             {/* Image */}
             <div className="relative w-full h-56 bg-gray-200 rounded-2xl mb-4 overflow-hidden">
-              {imageUrl ? (
-                <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" />
+              {(previewUrl || imageUrl) ? (
+                <img src={previewUrl || imageUrl} alt="Preview" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">No image</div>
+              )}
+              {classification && (
+                <div className="absolute bottom-2 left-2">
+                  <AiClassificationBadge classification={classification} compact />
+                </div>
               )}
             </div>
 
@@ -301,6 +376,7 @@ useEffect(() => {
     <option>Flooding</option>
     <option>Wildfire</option>
     <option>Drought</option>
+    <option>Storm</option>
     <option>Infrastructure</option>
   </select>
 
@@ -311,14 +387,74 @@ useEffect(() => {
 </div>
 
 
-  <label className="block text-base font-semibold text-[#123524] mb-2">Paste Image URL (ImageKit)</label>
+  <label className="block text-base font-semibold text-[#123524] mb-2">Disaster photo</label>
   <input
+    type="file"
+    accept="image/*"
+    onChange={(e) => handleImageFile(e.target.files?.[0])}
+    className="w-full p-3 mb-3 rounded-xl border border-white/30 bg-white/20 text-sm text-[#123524] file:mr-3 file:rounded-full file:border-0 file:bg-[#D3F78B]/70 file:px-3 file:py-1 file:text-sm file:font-semibold"
+  />
+  <input
+    ref={imageInputRef}
     type="text"
     value={imageUrl}
-    onChange={(e) => setImageUrl(e.target.value)}
-    placeholder="https://ik.imagekit.io/..."
-    className="w-full p-3 mb-6 rounded-xl border border-white/30 bg-white/20 shadow-inner shadow-white/10 backdrop-blur-md placeholder:text-gray-500 text-base text-[#123524] focus:outline-none focus:ring-2 focus:ring-green-400 transition"
+    onChange={(e) => {
+      setImageUrl(e.target.value);
+      if (!imageFile) setPreviewUrl('');
+    }}
+    onBlur={(event) => classifyPastedUrl(event.target.value)}
+    placeholder="or paste an image URL"
+    className="w-full p-3 mb-3 rounded-xl border border-white/30 bg-white/20 shadow-inner shadow-white/10 backdrop-blur-md placeholder:text-gray-500 text-base text-[#123524] focus:outline-none focus:ring-2 focus:ring-green-400 transition"
   />
+  <button
+    type="button"
+    onClick={() => classifyPastedUrl(imageInputRef.current?.value || imageUrl)}
+    disabled={classifying}
+    className="w-full mb-4 py-2 rounded-full text-sm font-semibold text-[#123524] bg-white/70 border border-[#123524]/10 disabled:opacity-50"
+  >
+    {classifying ? 'Reading photo...' : 'Classify photo'}
+  </button>
+
+  {classifying && (
+    <p className="text-sm text-[#5b7a8a] mb-4">Reading visual features…</p>
+  )}
+  {classifyError && (
+    <p className="text-sm text-red-600 mb-4">{classifyError}</p>
+  )}
+  {classification && (
+    <div className="mb-5 rounded-2xl bg-white/50 border border-white/40 p-4">
+      <p className="text-sm font-semibold text-[#123524] mb-2">
+        CNN sees {classification.disasterType} with {classification.severity} damage
+      </p>
+      <AiClassificationBadge classification={classification} />
+      <div className="mt-3 space-y-1.5">
+        {Object.entries(classification.probabilities.disaster).map(([name, probability]) => (
+          <div key={name}>
+            <div className="flex justify-between text-xs text-[#123524]/80">
+              <span>{name}</span>
+              <span>{Math.round(probability * 100)}%</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-white">
+              <div
+                className="h-1.5 rounded-full bg-[#5b7a8a]"
+                style={{ width: `${Math.round(probability * 100)}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+      {CATEGORY_FROM_DISASTER[classification.disasterType] &&
+        category !== CATEGORY_FROM_DISASTER[classification.disasterType] && (
+          <button
+            type="button"
+            onClick={() => setCategory(CATEGORY_FROM_DISASTER[classification.disasterType])}
+            className="mt-3 text-xs font-semibold text-[#123524] underline"
+          >
+            Use predicted category ({CATEGORY_FROM_DISASTER[classification.disasterType]})
+          </button>
+        )}
+    </div>
+  )}
 
 <button
   onClick={handleSubmit}

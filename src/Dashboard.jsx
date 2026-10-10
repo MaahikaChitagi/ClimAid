@@ -8,7 +8,7 @@ import { useUser } from './UserContext';
 import { motion } from 'framer-motion';
 
 
-const tabs = ['Flooding', 'Wildfire', 'Drought', 'Infrastructure'];
+const tabs = ['Flooding', 'Wildfire', 'Storm', 'Drought', 'Infrastructure'];
 
 const Dashboard = () => {
   const [user, setUser] = useState(null);

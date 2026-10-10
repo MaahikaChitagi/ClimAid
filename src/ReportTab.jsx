@@ -6,8 +6,9 @@ import maplibregl from 'maplibre-gl';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from './Config.js';
 import { FiChevronDown, FiChevronUp } from 'react-icons/fi';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import AiClassificationBadge from './AiClassificationBadge.jsx';
 
 // ✅ Frutiger Aero style base map (green/blue glow, soft contrast)
 const MAP_STYLE = 'https://tiles.basemaps.cartocdn.com/gl/positron-gl-style/style.json?optimize=true&color=78C0E0,CEF6D8';
@@ -18,6 +19,13 @@ const INITIAL_VIEW_STATE = {
   zoom: 9,
   pitch: 0,
   bearing: 0,
+};
+
+const SEVERITY_RADIUS = { low: 320, moderate: 520, severe: 860 };
+const SEVERITY_OUTLINE = {
+  low: [46, 125, 70],
+  moderate: [190, 120, 20],
+  severe: [170, 30, 30],
 };
 
 const getUrgencyColor = (urgency) => {
@@ -33,6 +41,7 @@ const getUrgencyColor = (urgency) => {
 const ReportTab = ({ category, isSidebarCollapsed }) => {
   const [reports, setReports] = useState([]);
   const [filterUrgency, setFilterUrgency] = useState('All');
+  const [filterSeverity, setFilterSeverity] = useState('All');
   const [selectedReport, setSelectedReport] = useState(null);
   const [collapsedPopup, setCollapsedPopup] = useState(true);
   const navigate = useNavigate();
@@ -43,7 +52,7 @@ const ReportTab = ({ category, isSidebarCollapsed }) => {
       const filtered = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        if (data.category.toLowerCase() === category.toLowerCase()) {
+        if (data.category?.toLowerCase() === category.toLowerCase()) {
           filtered.push({ id: doc.id, ...data });
         }
       });
@@ -52,9 +61,11 @@ const ReportTab = ({ category, isSidebarCollapsed }) => {
     fetchData();
   }, [category]);
 
-  const filteredReports = filterUrgency === 'All'
-    ? reports
-    : reports.filter((r) => r.urgency === filterUrgency);
+  const filteredReports = reports.filter((report) => {
+    const urgencyMatches = filterUrgency === 'All' || report.urgency === filterUrgency;
+    const severityMatches = filterSeverity === 'All' || report.aiClassification?.severity === filterSeverity;
+    return urgencyMatches && severityMatches;
+  });
 
   const scatterLayer = new ScatterplotLayer({
     id: 'scatterplot-layer',
@@ -63,7 +74,10 @@ const ReportTab = ({ category, isSidebarCollapsed }) => {
     getFillColor: (d) =>
   selectedReport?.id === d.id ? [66, 135, 245, 255] : [...getUrgencyColor(d.urgency), 180],
 
-    getRadius: 500,
+    getRadius: (d) => SEVERITY_RADIUS[d.aiClassification?.severity] || 500,
+    stroked: true,
+    getLineColor: (d) => [...(SEVERITY_OUTLINE[d.aiClassification?.severity] || [80, 80, 80]), d.aiClassification ? 220 : 0],
+    lineWidthMinPixels: 2,
     radiusUnits: 'meters',
     pickable: true,
     onClick: ({ object }) => {
@@ -101,6 +115,9 @@ const ReportTab = ({ category, isSidebarCollapsed }) => {
             style={{ width: '100%', height: '100%' }}
           />
         </DeckGL>
+        <div className="absolute bottom-4 left-4 z-10 rounded-2xl bg-white/85 px-3 py-2 text-xs text-[#123524] shadow">
+          Larger dots mean more predicted damage. Fill color is the report urgency.
+        </div>
 
         {selectedReport && (
           <div
@@ -110,11 +127,16 @@ className={`absolute top-10 left-1/2 transform -translate-x-1/2 w-[320px] p-5 z-
 }`}
 
           >
-            <div className="h-36 rounded-xl overflow-hidden mb-3 bg-gray-100">
+            <div className="relative h-36 rounded-xl overflow-hidden mb-3 bg-gray-100">
               {selectedReport.imageUrl ? (
                 <img src={selectedReport.imageUrl} alt="Issue" className="w-full h-full object-cover" />
               ) : (
                 <div className="h-full flex items-center justify-center text-sm text-gray-400">No image</div>
+              )}
+              {selectedReport.aiClassification && (
+                <div className="absolute bottom-2 left-2">
+                  <AiClassificationBadge classification={selectedReport.aiClassification} compact />
+                </div>
               )}
             </div>
             <h3 className="text-lg font-semibold mb-2">{selectedReport.title}</h3>
@@ -179,6 +201,17 @@ className={`absolute top-10 left-1/2 transform -translate-x-1/2 w-[320px] p-5 z-
           <option value="High">High</option>
           <option value="Emergency">Emergency</option>
         </select>
+        <label className="font-semibold text-sm ml-4">AI damage:</label>
+        <select
+          value={filterSeverity}
+          onChange={(e) => setFilterSeverity(e.target.value)}
+          className="border rounded px-2 py-1 ml-2"
+        >
+          <option value="All">All</option>
+          <option value="low">Low</option>
+          <option value="moderate">Moderate</option>
+          <option value="severe">Severe</option>
+        </select>
 
         <div
           className={`mt-6 transition-all duration-300 ${
@@ -200,11 +233,16 @@ className={`absolute top-10 left-1/2 transform -translate-x-1/2 w-[320px] p-5 z-
               }`}
             >
               <div className="bg-white rounded-3xl shadow-[6px_0_12px_rgba(0,0,0,0.15)] p-5 w-[320px] h-[480px] flex flex-col justify-between">
-                <div className="w-full h-48 bg-gray-200 rounded-2xl mb-4 overflow-hidden">
+                <div className="relative w-full h-48 bg-gray-200 rounded-2xl mb-4 overflow-hidden">
                   {r.imageUrl ? (
                     <img src={r.imageUrl} alt="Issue" className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">No image</div>
+                  )}
+                  {r.aiClassification && (
+                    <div className="absolute bottom-2 left-2">
+                      <AiClassificationBadge classification={r.aiClassification} compact />
+                    </div>
                   )}
                 </div>
 

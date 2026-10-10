@@ -1,0 +1,6 @@
+$kind: collection
+name: ClimAid disaster CNN
+description: Classify a disaster photo with the local PyTorch API.
+variables:
+  - key: base_url
+    value: http://127.0.0.1:8000

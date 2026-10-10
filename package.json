@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "start": "vite",
+    "classify-api": "ml/.venv/bin/uvicorn api:app --app-dir ml --port 8000",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"

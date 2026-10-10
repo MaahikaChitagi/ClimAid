@@ -12,6 +12,7 @@ import {
 import Sidebar from './Sidebar.jsx';
 import { useUser } from './UserContext.jsx';
 import { setDoc } from 'firebase/firestore';
+import AiClassificationBadge from './AiClassificationBadge.jsx';
 
 const Settings = () => {
   const [collapsed, setCollapsed] = useState(false);
@@ -216,7 +217,8 @@ useEffect(() => {
               {reportCards.map((card) => (
                 <div key={card.id} className="p-4 bg-white rounded shadow ">
                   <h3 className="font-semibold">{card.title || 'Untitled Report'}</h3>
-                  <p className="text-sm text-gray-600">{card.description || 'No description'}</p>
+                  <p className="text-sm text-gray-600 mb-2">{card.description || 'No description'}</p>
+                  <AiClassificationBadge classification={card.aiClassification} />
                 </div>
               ))}
             </div>
